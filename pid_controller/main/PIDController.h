@@ -14,6 +14,13 @@ public:
     float compute(float input, float dt);
     void reset();
     
+    // Input filtering
+    void setFilterWeight(float weight);
+    float getFilteredInput() const { return m_filtered_input; }
+    
+    // Output smoothing
+    void setOutputSmoothing(float alpha);
+    
     // Getters for monitoring
     float getSetpoint() const { return m_setpoint; }
     float getError() const { return m_error; }
@@ -49,6 +56,16 @@ private:
     float m_out_max;
     float m_i_min;
     float m_i_max;
+    
+    // Input filtering (exponential moving average)
+    float m_filtered_input;
+    float m_last_filtered_input;  // For derivative on measurement
+    float m_filter_alpha;  // Weight for new measurement (0.05 = 1/20)
+    bool m_first_input;
+    
+    // Output smoothing
+    float m_output_alpha;  // Weight for output smoothing (0 = no smoothing, 1 = no smoothing)
+    float m_last_output;   // Previous smoothed output
 };
 
 #endif // PID_CONTROLLER_H

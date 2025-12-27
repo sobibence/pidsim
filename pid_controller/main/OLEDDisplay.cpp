@@ -72,6 +72,26 @@ static const uint8_t font5x7[][5] = {
     {0x7F, 0x41, 0x41, 0x22, 0x1C}, // D
     {0x7F, 0x49, 0x49, 0x49, 0x41}, // E
     {0x7F, 0x09, 0x09, 0x09, 0x01}, // F
+    {0x3E, 0x41, 0x49, 0x49, 0x7A}, // G
+    {0x7F, 0x08, 0x08, 0x08, 0x7F}, // H
+    {0x00, 0x41, 0x7F, 0x41, 0x00}, // I
+    {0x20, 0x40, 0x41, 0x3F, 0x01}, // J
+    {0x7F, 0x08, 0x14, 0x22, 0x41}, // K
+    {0x7F, 0x40, 0x40, 0x40, 0x40}, // L
+    {0x7F, 0x02, 0x0C, 0x02, 0x7F}, // M
+    {0x7F, 0x04, 0x08, 0x10, 0x7F}, // N
+    {0x3E, 0x41, 0x41, 0x41, 0x3E}, // O
+    {0x7F, 0x09, 0x09, 0x09, 0x06}, // P
+    {0x3E, 0x41, 0x51, 0x21, 0x5E}, // Q
+    {0x7F, 0x09, 0x19, 0x29, 0x46}, // R
+    {0x46, 0x49, 0x49, 0x49, 0x31}, // S
+    {0x01, 0x01, 0x7F, 0x01, 0x01}, // T
+    {0x3F, 0x40, 0x40, 0x40, 0x3F}, // U
+    {0x1F, 0x20, 0x40, 0x20, 0x1F}, // V
+    {0x3F, 0x40, 0x38, 0x40, 0x3F}, // W
+    {0x63, 0x14, 0x08, 0x14, 0x63}, // X
+    {0x07, 0x08, 0x70, 0x08, 0x07}, // Y
+    {0x61, 0x51, 0x49, 0x45, 0x43}, // Z
 };
 
 OLEDDisplay::OLEDDisplay(const OLEDConfig& config)
@@ -232,7 +252,7 @@ void OLEDDisplay::setPixel(uint8_t x, uint8_t y, bool on) {
 }
 
 void OLEDDisplay::drawChar(uint8_t x, uint8_t y, char c) {
-    if (c < 32 || c > 96) return;
+    if (c < 32 || c > 90) return;  // Font has chars 32-90 (Space through Z)
     
     const uint8_t* glyph = font5x7[c - 32];
     for (uint8_t i = 0; i < 5; i++) {
@@ -283,32 +303,25 @@ void OLEDDisplay::updateStatus(float setpoint, float current_temp, float output_
                                float dimmer_percent, bool relay_on) {
     clear();
     
-    // Line 1: Setpoint
-    drawString(0, 0, "SP:");
-    drawNumber(24, 0, setpoint, 1);
-    drawString(60, 0, "C");
+    // Line 1: Setpoint (larger text at top)
+    drawString(0, 5, "SP:");
+    drawNumber(24, 5, setpoint, 1);
+    drawChar(60, 5, 'o');  // degree symbol approximation
+    drawChar(66, 5, 'C');
     
-    // Line 2: Current temperature
-    drawString(0, 10, "T:");
-    drawNumber(18, 10, current_temp, 1);
-    drawString(54, 10, "C");
+    // Line 2: Current temperature (middle)
+    drawString(0, 25, "T:");
+    drawNumber(18, 25, current_temp, 1);
+    drawChar(54, 25, 'o');  // degree symbol approximation
+    drawChar(60, 25, 'C');
     
-    // Line 3: Total output
-    drawString(0, 20, "Out:");
-    drawNumber(30, 20, output_percent, 0);
-    drawString(54, 20, "%");
+    // Line 3: Output percentage
+    drawString(0, 45, "OUT:");
+    drawNumber(36, 45, output_percent, 0);
+    drawString(66, 45, "%");
     
-    // Line 4: Dimmer
-    drawString(0, 30, "Dim:");
-    drawNumber(30, 30, dimmer_percent, 0);
-    drawString(54, 30, "%");
-    
-    // Line 5: Relay status
-    drawString(0, 40, "Relay:");
-    drawString(42, 40, relay_on ? "ON " : "OFF");
-    
-    // Progress bar for total output
-    drawProgressBar(0, 52, 127, 10, output_percent);
+    // Progress bar for output at bottom
+    drawProgressBar(0, 54, 127, 10, output_percent);
     
     display();
 }

@@ -13,18 +13,18 @@ static const char *TAG = "PID_TEMP_CONTROL";
 // ==================== CONFIGURATION ====================
 
 // === Hardware Pin Configuration ===
-constexpr gpio_num_t MAX6675_SCK      = GPIO_NUM_1;   // MAX6675 SPI Clock
-constexpr gpio_num_t MAX6675_CS       = GPIO_NUM_2;   // MAX6675 Chip Select
-constexpr gpio_num_t MAX6675_MISO     = GPIO_NUM_3;   // MAX6675 Data Out
-constexpr gpio_num_t TRIAC_GATE_PIN   = GPIO_NUM_4;   // TRIAC gate control
-constexpr gpio_num_t ZERO_CROSS_PIN   = GPIO_NUM_5;   // Zero-cross detector input
+constexpr gpio_num_t MAX6675_SCK      = GPIO_NUM_0;   // MAX6675 SPI Clock
+constexpr gpio_num_t MAX6675_CS       = GPIO_NUM_13;   // MAX6675 Chip Select
+constexpr gpio_num_t MAX6675_MISO     = GPIO_NUM_14;   // MAX6675 Data Out
+constexpr gpio_num_t TRIAC_GATE_PIN   = GPIO_NUM_22;   // TRIAC gate control
+constexpr gpio_num_t ZERO_CROSS_PIN   = GPIO_NUM_10;   // Zero-cross detector input
 constexpr gpio_num_t RELAY_PIN        = GPIO_NUM_6;   // Relay control (for 2nd element)
-constexpr adc_channel_t POT_ADC_CH    = ADC_CHANNEL_0; // ADC for potentiometer (GPIO 36 on ESP32)
+constexpr adc_channel_t POT_ADC_CH    = ADC_CHANNEL_0; // ADC for potentiometer - GPIO_5
 
 // === OLED Display Configuration ===
 constexpr bool ENABLE_OLED_DISPLAY = true;     // Enable/disable OLED display
-constexpr gpio_num_t OLED_SDA_PIN  = GPIO_NUM_7;  // I2C SDA for OLED
-constexpr gpio_num_t OLED_SCL_PIN  = GPIO_NUM_8;  // I2C SCL for OLED
+constexpr gpio_num_t OLED_SDA_PIN  = GPIO_NUM_12;  // I2C SDA for OLED
+constexpr gpio_num_t OLED_SCL_PIN  = GPIO_NUM_11;  // I2C SCL for OLED
 constexpr uint8_t OLED_I2C_ADDR    = 0x3C;     // I2C address (usually 0x3C or 0x3D)
 constexpr uint8_t OLED_WIDTH       = 128;      // Screen width in pixels
 constexpr uint8_t OLED_HEIGHT      = 64;       // Screen height in pixels (64 or 32)
@@ -38,19 +38,19 @@ constexpr float TEMP_SENSOR_SCALE  = 1.0f;   // Scale factor (usually 1.0)
 
 // === PID Parameters ===
 // Tuned values from Python simulation
-constexpr float PID_KP = 0.5f;       // Proportional gain
+constexpr float PID_KP = 0.2f;       // Proportional gain
 constexpr float PID_KI = 0.0019f;    // Integral gain
-constexpr float PID_KD = 5.0f;       // Derivative gain
+constexpr float PID_KD = 2.0f;       // Derivative gain
 
 // === Setpoint Configuration ===
-constexpr bool USE_POTENTIOMETER = false;      // true = pot controls setpoint, false = fixed
+constexpr bool USE_POTENTIOMETER = true;      // true = pot controls setpoint, false = fixed
 constexpr float FIXED_SETPOINT = 60.0f;        // Fixed setpoint when pot disabled (°C)
-constexpr float POT_MIN_TEMP = 20.0f;          // Minimum temperature for pot (°C)
-constexpr float POT_MAX_TEMP = 100.0f;         // Maximum temperature for pot (°C)
+constexpr float POT_MIN_TEMP = 20.0f;          // Minimum temperature for pot (°C) - at 0V
+constexpr float POT_MAX_TEMP = 110.0f;         // Maximum temperature for pot (°C) - at 1.7V
 
 // === Dual Heating Element Configuration ===
 constexpr bool ENABLE_DUAL_ELEMENTS = false;    // true = use dimmer + relay, false = dimmer only
-constexpr float ELEMENT_POWER_WATTS = 1800.0f; // Power per heating element (W)
+constexpr float ELEMENT_POWER_WATTS = 1200.0f; // Power per heating element (W)
 // Note: Total power = ELEMENT_POWER_WATTS * (DUAL_ELEMENTS ? 2 : 1)
 
 // === AC Dimmer Configuration ===
@@ -58,7 +58,7 @@ constexpr uint32_t AC_FREQUENCY_HZ = 50;       // Mains frequency: 50Hz (EU) or 
 constexpr uint32_t TRIAC_PULSE_WIDTH_US = 10;  // TRIAC gate pulse width (microseconds)
 
 // === Control Loop Timing ===
-constexpr uint32_t CONTROL_LOOP_MS = 1000;     // Update rate (milliseconds)
+constexpr uint32_t CONTROL_LOOP_MS = 500;     // Update rate (milliseconds)
 constexpr float CONTROL_LOOP_DT = CONTROL_LOOP_MS / 1000.0f;  // seconds
 
 // === Feed-forward Compensation ===

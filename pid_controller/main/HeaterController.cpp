@@ -72,6 +72,9 @@ bool HeaterController::init() {
         gpio_set_level(m_config.relay_pin, 0);
     }
     
+    // Initialize power to phase angle lookup table BEFORE starting the task
+    initPowerLookupTable();
+    
     // Create dimmer control task
     m_running = true;
     BaseType_t task_ret = xTaskCreate(
@@ -157,43 +160,123 @@ void HeaterController::dimmerTaskWrapper(void* arg) {
 void HeaterController::dimmerControlTask() {
     ESP_LOGI(TAG, "Dimmer control task started");
     
+    bool was_full_power = false;
+    
     while (m_running) {
+        // Sample current power setting
+        float current_power = m_dimmer_power;
+        
+        if (current_power < 0.01f) {
+            // Power too low, ensure TRIAC is off
+            if (was_full_power) {
+                gpio_set_level(m_config.dimmer_pin, 0);
+                was_full_power = false;
+            }
+            // Wait for next zero-cross
+            m_zero_cross->waitForZeroCross(100);
+            continue;
+        }
+        
+        if (current_power >= 0.99f) {
+            // Full power: keep gate signal HIGH continuously
+            // TRIAC will re-trigger every half-cycle automatically
+            if (!was_full_power) {
+                gpio_set_level(m_config.dimmer_pin, 1);
+                was_full_power = true;
+                ESP_LOGI(TAG, "Full power mode: gate HIGH");
+            }
+            // Still wait for zero-cross to keep timing in sync
+            m_zero_cross->waitForZeroCross(100);
+            continue;
+        }
+        
+        // Partial power mode - ensure we're not in full power mode
+        if (was_full_power) {
+            gpio_set_level(m_config.dimmer_pin, 0);
+            was_full_power = false;
+        }
+        
         // Wait for zero-cross event
         if (!m_zero_cross->waitForZeroCross(100)) {
             continue;  // Timeout, try again
         }
         
-        if (m_dimmer_power < 0.01f) {
-            // Power too low, don't fire TRIAC
-            continue;
-        }
-        
-        if (m_dimmer_power > 0.99f) {
-            // Full power, fire immediately
-            gpio_set_level(m_config.dimmer_pin, 1);
-            esp_rom_delay_us(m_config.triac_pulse_us);
-            gpio_set_level(m_config.dimmer_pin, 0);
-            continue;
-        }
-        
         // Calculate phase angle for desired power
-        float phase_angle = powerToPhaseAngle(m_dimmer_power);
+        float phase_angle = powerToPhaseAngle(current_power);
         
         // Convert to delay from zero-cross
         uint32_t half_period = m_zero_cross->getHalfPeriod();
         uint32_t delay_us = (uint32_t)(phase_angle / M_PI * half_period);
         
+        // Safety checks: ensure delay is valid and won't block too long
+        if (delay_us >= half_period || delay_us > 10000) {
+            ESP_LOGW(TAG, "Invalid delay calculated: %lu us (half_period=%lu, phase_angle=%.4f, power=%.3f)", 
+                     delay_us, half_period, phase_angle, current_power);
+            delay_us = half_period - 100;  // Fire near end of half-cycle
+        }
+        
+        // Additional safety: cap maximum delay to prevent watchdog triggers
+        if (delay_us > half_period - 50) {
+            delay_us = half_period - 50;
+        }
+        
         // Wait for the calculated delay
         esp_rom_delay_us(delay_us);
         
-        // Fire TRIAC
+        // Fire TRIAC pulse
         gpio_set_level(m_config.dimmer_pin, 1);
         esp_rom_delay_us(m_config.triac_pulse_us);
         gpio_set_level(m_config.dimmer_pin, 0);
     }
     
+    // Ensure TRIAC is off when task exits
+    gpio_set_level(m_config.dimmer_pin, 0);
+    
     ESP_LOGI(TAG, "Dimmer control task stopped");
     vTaskDelete(NULL);
+}
+
+void HeaterController::initPowerLookupTable() {
+    ESP_LOGI(TAG, "Computing power to phase angle lookup table...");
+    
+    // Compute 101 entries (0% to 100% in 1% steps)
+    for (int i = 0; i <= 100; i++) {
+        float target_power = i / 100.0f;
+        
+        if (target_power <= 0.0f) {
+            m_power_to_angle_lut[i] = M_PI;
+            continue;
+        }
+        if (target_power >= 1.0f) {
+            m_power_to_angle_lut[i] = 0.0f;
+            continue;
+        }
+        
+        // Binary search to find phase angle for target power
+        float alpha_min = 0.0f;
+        float alpha_max = M_PI;
+        float alpha_mid;
+        
+        for (int iter = 0; iter < 20; iter++) {
+            alpha_mid = (alpha_min + alpha_max) / 2.0f;
+            float power_mid = phaseAngleToPower(alpha_mid);
+            
+            if (std::abs(power_mid - target_power) < 0.0001f) {
+                break;
+            }
+            
+            if (power_mid > target_power) {
+                alpha_min = alpha_mid;
+            } else {
+                alpha_max = alpha_mid;
+            }
+        }
+        
+        m_power_to_angle_lut[i] = alpha_mid;
+    }
+    
+    ESP_LOGI(TAG, "Lookup table computed: 0%%=%.4f rad, 50%%=%.4f rad, 100%%=%.4f rad",
+             m_power_to_angle_lut[0], m_power_to_angle_lut[50], m_power_to_angle_lut[100]);
 }
 
 float HeaterController::phaseAngleToPower(float alpha) const {
@@ -207,30 +290,21 @@ float HeaterController::phaseAngleToPower(float alpha) const {
 }
 
 float HeaterController::powerToPhaseAngle(float power) const {
-    // Inverse of phaseAngleToPower
-    // Use binary search to find phase angle for desired power
+    // Fast lookup table with linear interpolation
     if (power >= 1.0f) return 0.0f;
     if (power <= 0.0f) return M_PI;
     
-    float alpha_min = 0.0f;
-    float alpha_max = M_PI;
-    float alpha_mid;
+    // Map power to table index (0-100)
+    float index_f = power * 100.0f;
+    int index = (int)index_f;
     
-    // Binary search with tolerance
-    for (int i = 0; i < 20; i++) {
-        alpha_mid = (alpha_min + alpha_max) / 2.0f;
-        float power_mid = phaseAngleToPower(alpha_mid);
-        
-        if (std::abs(power_mid - power) < 0.001f) {
-            break;
-        }
-        
-        if (power_mid > power) {
-            alpha_min = alpha_mid;
-        } else {
-            alpha_max = alpha_mid;
-        }
-    }
+    // Clamp to valid range
+    if (index >= 100) return m_power_to_angle_lut[100];
     
-    return alpha_mid;
+    // Linear interpolation between table entries
+    float frac = index_f - index;
+    float angle1 = m_power_to_angle_lut[index];
+    float angle2 = m_power_to_angle_lut[index + 1];
+    
+    return angle1 + frac * (angle2 - angle1);
 }

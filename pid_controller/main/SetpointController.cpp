@@ -90,21 +90,32 @@ float SetpointController::readSetpoint() {
     
     m_last_raw_value = adc_raw;
     
-    // If calibrated, convert to voltage (mV) then to temperature
-    // Otherwise use raw value (0-4095)
+    // Direct voltage-to-temperature mapping:
+    // 0V (0mV) = 40°C (minimum temperature)
+    // 3.3V (3300mV) = 100°C (maximum temperature)
+    // As voltage increases, temperature increases
+    
+    constexpr float V_MIN_MV = 0.0f;      // Voltage at min temp (40°C)
+    constexpr float V_MAX_MV = 3300.0f;   // Voltage at max temp (100°C)
+    
     float normalized;
+    int voltage_mv = 0;
     
     if (m_calibrated) {
-        int voltage_mv;
         ret = adc_cali_raw_to_voltage(m_cali_handle, adc_raw, &voltage_mv);
         if (ret == ESP_OK) {
-            // Assuming 3.3V reference with 12dB attenuation (up to ~2450mV)
-            normalized = voltage_mv / 2450.0f;
+            // Direct mapping: higher voltage = higher temperature
+            normalized = (voltage_mv - V_MIN_MV) / (V_MAX_MV - V_MIN_MV);
+            ESP_LOGI(TAG, "ADC: raw=%d, voltage=%dmV, normalized=%.3f", adc_raw, voltage_mv, normalized);
         } else {
+            // Fallback to raw value mapping (direct)
             normalized = adc_raw / 4095.0f;
+            ESP_LOGW(TAG, "ADC: raw=%d, voltage conversion failed, normalized=%.3f", adc_raw, normalized);
         }
     } else {
+        // Raw value mapping (direct)
         normalized = adc_raw / 4095.0f;
+        ESP_LOGI(TAG, "ADC: raw=%d (uncalibrated), normalized=%.3f", adc_raw, normalized);
     }
     
     // Clamp to 0-1 range

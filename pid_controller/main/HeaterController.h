@@ -41,6 +41,7 @@ private:
     // For phase angle α (0 to π): P_rms/P_max = (1 - α/π + sin(2α)/(2π))
     float phaseAngleToPower(float phase_angle_rad) const;
     float powerToPhaseAngle(float power_percentage) const;
+    void initPowerLookupTable();
     
     DualHeaterConfig m_config;
     ZeroCrossDetector* m_zero_cross;
@@ -52,6 +53,10 @@ private:
     TaskHandle_t m_dimmer_task;
     bool m_running;
     bool m_initialized;
+    
+    // Lookup table: power (0.0 to 1.0) -> phase angle (0 to π)
+    // 101 entries for 0%, 1%, 2%, ... 100%
+    float m_power_to_angle_lut[101];
 };
 
 #endif // HEATER_CONTROLLER_H
